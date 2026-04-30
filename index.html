@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Mucklo Boy's Day</title>
+<title>Mucklo Boy's Day — A Working Man's Journey</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #050507; overflow: hidden; touch-action: none; font-family: 'Courier New', monospace; }
@@ -42,7 +42,7 @@ canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edge
 <div id="container"><canvas id="game"></canvas></div>
 <div id="hud">
   <span id="hud-score">SCORE: 0</span>
-  <span id="hud-level">LV1: COMMUTE</span>
+  <span id="hud-level">LV1: DAWN RIDE</span>
   <span id="hud-lives">♥♥♥</span>
 </div>
 <div id="tool-hud"></div>
@@ -96,6 +96,7 @@ const TUNES = [
   [[262,330,392,523],[294,370,440,587],[349,440,523,659]],
   [[220,277,330,415],[196,247,294,370],[165,208,247,330]],
   [[349,440,523,698],[392,494,587,740],[440,554,659,880]],
+  [[196,247,294,392],[175,220,262,349],[165,208,247,330]],
 ];
 let musicStep = 0, musicChord = 0, musicLevel = 0;
 
@@ -103,7 +104,7 @@ function startMusic(lv) {
   stopMusic(); musicStep = 0; musicChord = 0; musicLevel = lv;
   function tick() {
     if (!AC) return;
-    const pat = TUNES[Math.min(lv, 2)];
+    const pat = TUNES[Math.min(lv, TUNES.length-1)];
     const note = pat[musicChord % pat.length][musicStep % 4];
     tone(note, 0.09, 'square', 0.04);
     // bass
@@ -223,7 +224,7 @@ function drawWife(sx, sy) {
 }
 
 // ── GAME STATE ─────────────────────────────────
-const ST = { TITLE:'title', PLAY:'play', TRANSITION:'transition', DEAD:'dead', GAMEOVER:'gameover', ENDING:'ending' };
+const ST = { TITLE:'title', CRASH:'crash', PLAY:'play', TRANSITION:'transition', DEAD:'dead', GAMEOVER:'gameover', ENDING:'ending' };
 let state = ST.TITLE;
 
 let score = 0;
@@ -232,11 +233,14 @@ let level = 0;
 let fc = 0; // frame counter
 let scrollX = 0;
 let distInLevel = 0;
-const LEVEL_LEN = [3200, 3800, 4200];
-const SCROLL_SPEED = [2.2, 2.6, 3.0];
+const LEVEL_LEN = [3200, 3500, 3500, 3800];
+const SCROLL_SPEED = [2.2, 2.5, 2.6, 3.0];
 let spd = SCROLL_SPEED[0];
 
-const LEVEL_NAMES = ['LV1: COMMUTE', 'LV2: THE GRIND', 'LV3: HEADING HOME'];
+const LEVEL_NAMES = ['LV1: DAWN RIDE', 'LV2: CITY COMMUTE', 'LV3: NIGHT SHIFT OVER', 'LV4: DARK ROAD HOME'];
+
+// Bike crash intro state
+let crashIntro = false, crashT = 0, crashLanded = false, crashGrassBonus = false;
 
 // Player
 let pl = {};
@@ -261,9 +265,14 @@ let titleT = 0, transT = 0, deathT = 0, endT = 0, endPhase = 0;
 
 // ── LEVEL THEMES ───────────────────────────────
 const THEMES = [
-  { sky0:'#020210', sky1:'#0a0820', gnd:'#1a1230', gndLine:'#39ff14', accent:'#39ff14', win:'#ffff44' },
-  { sky0:'#080410', sky1:'#120818', gnd:'#120820', gndLine:'#ff3cac', accent:'#ff3cac', win:'#ff88ff' },
-  { sky0:'#040208', sky1:'#0a0510', gnd:'#101520', gndLine:'#00e5ff', accent:'#00e5ff', win:'#88ddff' },
+  // LV1: Pre-dawn country road
+  { sky0:'#020210', sky1:'#0a0820', gnd:'#1a2a10', gndLine:'#39ff14', accent:'#39ff14', win:'#ffff44', country:true },
+  // LV2: City commute to factory, early morning
+  { sky0:'#0a0818', sky1:'#1a1028', gnd:'#1a1830', gndLine:'#ff8c00', accent:'#ff8c00', win:'#ffcc44', country:false },
+  // LV3: Night city after shift
+  { sky0:'#050510', sky1:'#0a0818', gnd:'#120820', gndLine:'#ff3cac', accent:'#ff3cac', win:'#ff88ff', country:false },
+  // LV4: Dark country return
+  { sky0:'#010108', sky1:'#050510', gnd:'#0a1508', gndLine:'#00e5ff', accent:'#00e5ff', win:'#88ddff', country:true },
 ];
 
 // ── OBSTACLE DEFINITIONS ───────────────────────
@@ -272,28 +281,38 @@ function makeObs(lv, wx) {
   const r = Math.random();
 
   if (lv === 0) {
-    if (r < 0.3) return { type:'car', x:wx, y:gy-38, w:64, h:36, vx:-1.2, hp:1, col:'#ff3cac', col2:'#cc2299' };
-    if (r < 0.55) return { type:'puddle', x:wx, y:gy-7, w:38, h:10, vx:0, hp:1, col:'#00e5ff' };
+    // Country morning: potholes, hippies, puddles
+    if (r < 0.35) return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-0.8, hp:1, bobT:0 };
+    if (r < 0.55) return { type:'pothole', x:wx, y:gy-7, w:38, h:10, vx:0, hp:1, col:'#443322' };
     if (r < 0.75) return { type:'cone', x:wx, y:gy-28, w:14, h:28, vx:0, hp:1 };
-    return { type:'cone', x:wx, y:gy-28, w:14, h:28, vx:0, hp:1, extra:{ type:'cone', x:wx+24, y:gy-28, w:14, h:28, vx:0, hp:1 } };
+    return { type:'pothole', x:wx, y:gy-7, w:30, h:10, vx:0, hp:1, col:'#443322', extra:{ type:'hippie', x:wx+100, y:gy-50, origY:gy-50, w:22, h:50, vx:-0.6, hp:1, bobT:0 } };
   }
   if (lv === 1) {
-    if (r < 0.3) return { type:'boss', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-0.7, hp:1, bobT:0 };
-    if (r < 0.55) return { type:'paper', x:wx, y:gy-90, w:18, h:13, vx:-2.8, vy:0, hp:1, phase:Math.random()*6.28 };
-    if (r < 0.75) return { type:'vending', x:wx, y:gy-56, w:22, h:56, vx:0, hp:1 };
-    return { type:'paper', x:wx, y:gy-60, w:18, h:13, vx:-3.2, vy:0, hp:1, phase:Math.random()*6.28,
-             extra:{ type:'paper', x:wx+80, y:gy-100, w:18, h:13, vx:-3.2, vy:0, hp:1, phase:2 } };
+    // City commute: hippies, cars, protest signs
+    if (r < 0.3) return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-0.9, hp:1, bobT:0 };
+    if (r < 0.5) return { type:'car', x:wx, y:gy-38, w:64, h:36, vx:-1.4, hp:1, col:'#8866aa', col2:'#665588' };
+    if (r < 0.7) return { type:'sign', x:wx, y:gy-70, w:18, h:13, vx:-2.5, vy:0, hp:1, phase:Math.random()*6.28 };
+    return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-1.0, hp:1, bobT:0,
+             extra:{ type:'sign', x:wx+80, y:gy-80, w:18, h:13, vx:-2.8, vy:0, hp:1, phase:2 } };
   }
-  // lv 2
-  if (r < 0.35) return { type:'car', x:wx, y:gy-38, w:72, h:36, vx:-1.8, hp:1, col:'#00e5ff', col2:'#0088aa' };
-  if (r < 0.6) return { type:'puddle', x:wx, y:gy-7, w:50, h:10, vx:0, hp:1, col:'#4400ff' };
-  return { type:'cone', x:wx, y:gy-28, w:14, h:28, vx:0, hp:1 };
+  if (lv === 2) {
+    // Night city after shift: more aggressive hippies, cars
+    if (r < 0.3) return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-1.2, hp:1, bobT:0 };
+    if (r < 0.5) return { type:'car', x:wx, y:gy-38, w:72, h:36, vx:-1.8, hp:1, col:'#ff3cac', col2:'#cc2299' };
+    if (r < 0.7) return { type:'vending', x:wx, y:gy-56, w:22, h:56, vx:0, hp:1 };
+    return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-1.4, hp:1, bobT:0 };
+  }
+  // lv 3: dark country return — hippies in the dark, potholes
+  if (r < 0.35) return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-1.3, hp:1, bobT:0 };
+  if (r < 0.55) return { type:'pothole', x:wx, y:gy-7, w:50, h:10, vx:0, hp:1, col:'#332211' };
+  if (r < 0.75) return { type:'car', x:wx, y:gy-38, w:64, h:36, vx:-2.0, hp:1, col:'#00e5ff', col2:'#0088aa' };
+  return { type:'hippie', x:wx, y:gy-50, origY:gy-50, w:22, h:50, vx:-1.5, hp:1, bobT:0 };
 }
 
 function makePick(wx) {
-  const tools = ['wrench','hammer','screwdriver'];
+  const tools = ['wrench','hammer','thermos'];
   const tool = tools[Math.floor(Math.random() * 3)];
-  const cols = { wrench:'#aaaaaa', hammer:'#887755', screwdriver:'#ffcc00' };
+  const cols = { wrench:'#aaaaaa', hammer:'#887755', thermos:'#cc6633' };
   return { tool, x:wx, y:GY()-70, w:20, h:20, col:cols[tool], bobT:Math.random()*6.28, done:false };
 }
 
@@ -304,7 +323,7 @@ function initLevel(lv) {
   scrollX = 0; distInLevel = 0;
   nextObsAt = 380; nextPickAt = 300;
   goalReached = false;
-  spd = SCROLL_SPEED[lv];
+  spd = SCROLL_SPEED[Math.min(lv, SCROLL_SPEED.length-1)];
   resetPlayer();
   updateHUD();
   startMusic(lv);
@@ -312,7 +331,10 @@ function initLevel(lv) {
 
 function initGame() {
   score = 0; lives = 3;
+  // Start with bike crash intro
+  crashIntro = true; crashT = 0; crashLanded = false; crashGrassBonus = false;
   initLevel(0);
+  state = ST.CRASH;
 }
 
 // ── PARTICLES ──────────────────────────────────
@@ -365,39 +387,60 @@ function drawCone(x, y, w, h) {
   ctx.fillStyle='#333'; ctx.fillRect(x-2, y+h-3, w+4, 3);
 }
 
-function drawBoss(x, y, w, h) {
-  // Dark suit body
-  ctx.fillStyle='#222233'; ctx.fillRect(x, y+h*.38, w, h*.62);
+function drawHippie(x, y, w, h) {
+  // Long hair (messy)
+  ctx.fillStyle='#886622'; ctx.fillRect(x, y, w, h*.25);
+  ctx.fillRect(x-2, y+3, 3, h*.35); ctx.fillRect(x+w-1, y+3, 3, h*.35);
+  // Headband
+  ctx.fillStyle='#ff4444'; ctx.fillRect(x, y+h*.12, w, 3);
   // Head
-  ctx.fillStyle='#ffccaa'; ctx.fillRect(x+2, y, w-4, h*.42);
-  // Angry brows
+  ctx.fillStyle='#eebb88'; ctx.fillRect(x+2, y+h*.08, w-4, h*.28);
+  // Squinty eyes
   ctx.fillStyle='#333';
-  ctx.fillRect(x+3, y+3, 5, 2); ctx.fillRect(x+w-8, y+3, 5, 2);
-  // Eyes (red rage)
-  ctx.fillStyle='#cc0000';
-  ctx.fillRect(x+3, y+7, 4, 4); ctx.fillRect(x+w-7, y+7, 4, 4);
-  // Frown
-  ctx.fillStyle='#882200';
-  ctx.fillRect(x+4, y+h*.3, w-8, 2);
-  ctx.fillRect(x+3, y+h*.27, 2, 3); ctx.fillRect(x+w-5, y+h*.27, 2, 3);
-  // Red tie
-  ctx.fillStyle='#cc0000'; ctx.fillRect(x+w/2-2, y+h*.38, 4, h*.38);
-  // Arms reaching
-  ctx.fillStyle='#222233';
-  ctx.fillRect(x-7, y+h*.42, 9, 4); ctx.fillRect(x+w-2, y+h*.42, 9, 4);
-  // Briefcase
-  ctx.fillStyle='#885522'; ctx.fillRect(x+w+1, y+h*.6, 13, 11);
-  ctx.fillStyle='#663300'; ctx.fillRect(x+w+5, y+h*.58, 5, 3);
+  ctx.fillRect(x+4, y+h*.18, 4, 2); ctx.fillRect(x+w-8, y+h*.18, 4, 2);
+  // Grin
+  ctx.fillStyle='#663300';
+  ctx.fillRect(x+5, y+h*.28, w-10, 2);
+  // Tie-dye shirt
+  ctx.fillStyle='#ff6600'; ctx.fillRect(x, y+h*.38, w, h*.32);
+  ctx.fillStyle='#ffcc00'; ctx.fillRect(x+2, y+h*.42, 4, h*.12);
+  ctx.fillStyle='#66cc66'; ctx.fillRect(x+w-6, y+h*.42, 4, h*.12);
+  // Bell-bottom jeans
+  ctx.fillStyle='#5566aa'; ctx.fillRect(x, y+h*.7, w, h*.3);
+  ctx.fillRect(x-2, y+h*.85, 3, h*.15); ctx.fillRect(x+w-1, y+h*.85, 3, h*.15);
+  // Peace sign on shirt
+  ctx.fillStyle='#fff';
+  ctx.fillRect(x+w/2-1, y+h*.4, 2, 8);
+  ctx.fillRect(x+w/2-4, y+h*.44, 8, 2);
+  // Protest sign (held up)
+  ctx.fillStyle='#ddcc88'; ctx.fillRect(x-8, y-15, 18, 14);
+  ctx.fillStyle='#cc2200'; ctx.font='5px monospace'; ctx.textAlign='center';
+  ctx.fillText('NO', x+1, y-6);
+  ctx.fillText('WORK', x+1, y-1);
+  // Sign stick
+  ctx.fillStyle='#886644'; ctx.fillRect(x, y-1, 2, h*.4);
+}
+
+function drawPothole(x, y, w, h, col) {
+  ctx.fillStyle = col || '#443322'; ctx.globalAlpha = 0.85;
+  ctx.fillRect(x+3, y, w-6, h);
+  ctx.fillRect(x, y+2, w, h-4);
+  ctx.globalAlpha = .35; ctx.fillStyle='#111';
+  ctx.fillRect(x+5, y+2, w-10, h-4);
+  ctx.globalAlpha = 1;
+}
+
+function drawSign(x, y, w, h) {
+  // Flying protest sign
+  ctx.fillStyle='#eecc88'; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle='#cc0000'; ctx.font='5px monospace'; ctx.textAlign='center';
+  ctx.fillText('DOWN', x+w/2, y+5);
+  ctx.fillText('W/MAN', x+w/2, y+10);
+  ctx.fillStyle='#886644'; ctx.fillRect(x+w/2-1, y+h, 2, 8);
 }
 
 function drawPaper(x, y, w, h) {
-  ctx.fillStyle='#ffffff'; ctx.fillRect(x, y, w, h);
-  ctx.fillStyle='#aaaaaa'; ctx.fillRect(x+2, y+2, w-4, 1); ctx.fillRect(x+2, y+5, w-5, 1);
-  ctx.fillStyle='#cc0000'; ctx.globalAlpha=.7;
-  ctx.fillRect(x+1, y+3, w-2, 4);
-  ctx.fillStyle='#ffffff'; ctx.font='5px monospace'; ctx.textAlign='center';
-  ctx.fillText('DUE', x+w/2, y+7);
-  ctx.globalAlpha=1;
+  drawSign(x, y, w, h);
 }
 
 function drawVending(x, y, w, h) {
@@ -429,11 +472,17 @@ function drawHammerIcon(x, y) {
   ctx.fillStyle='#665544'; ctx.fillRect(x+4,y,10,6);
   ctx.fillStyle='#443322'; ctx.fillRect(x+8,y+6,3,11);
 }
-function drawScrewdriverIcon(x, y) {
-  ctx.fillStyle='#ffcc00'; ctx.fillRect(x+7,y,5,3);
-  ctx.fillStyle='#ccaa00'; ctx.fillRect(x+8,y+3,3,11);
-  ctx.fillStyle='#999'; ctx.fillRect(x+8,y+14,3,4);
-  ctx.fillRect(x+7,y+17,5,1);
+function drawThermosIcon(x, y) {
+  // Thermos body
+  ctx.fillStyle='#cc6633'; ctx.fillRect(x+5,y+3,8,13);
+  // Cap
+  ctx.fillStyle='#aa4422'; ctx.fillRect(x+6,y,6,4);
+  // Lid/cup top
+  ctx.fillStyle='#884411'; ctx.fillRect(x+4,y+2,10,2);
+  // Coffee steam
+  ctx.fillStyle='#fff'; ctx.globalAlpha=0.5;
+  ctx.fillRect(x+7,y-2,2,2); ctx.fillRect(x+10,y-3,1,2);
+  ctx.globalAlpha=1;
 }
 
 // ── BACKGROUND ─────────────────────────────────
@@ -446,7 +495,7 @@ function drawBG(lv) {
   g.addColorStop(0, th.sky0); g.addColorStop(1, th.sky1);
   ctx.fillStyle = g; ctx.fillRect(0,0,W,gy);
 
-  // Stars (lv 0 and 2)
+  // Stars (country levels 0,3 and night city lv2)
   if (lv !== 1) {
     for (let i=0;i<50;i++) {
       const sx=(Math.sin(i*137.5)*.5+.5)*W, sy=(Math.cos(i*97.3)*.5+.5)*gy*.75;
@@ -457,41 +506,70 @@ function drawBG(lv) {
     ctx.globalAlpha=1;
   }
 
-  // Moon (lv 0) or sun-setting (lv 2)
-  if (lv===0) {
+  // Moon (lv 0,3) or sunrise (lv 1)
+  if (lv===0 || lv===3) {
     ctx.fillStyle='#ffffcc'; ctx.globalAlpha=.9;
     ctx.fillRect(W*.8, 24, 28, 28);
     ctx.fillStyle=th.sky0; ctx.fillRect(W*.8+18, 29, 8, 8); // crater
     ctx.globalAlpha=1;
-  } else if (lv===2) {
-    const sunG = ctx.createRadialGradient(W*.2,gy*.4,2,W*.2,gy*.4,60);
-    sunG.addColorStop(0,'rgba(255,180,50,0.7)'); sunG.addColorStop(1,'rgba(255,80,0,0)');
-    ctx.fillStyle=sunG; ctx.fillRect(W*.2-60,gy*.4-60,120,120);
-    ctx.fillStyle='#ffaa22'; ctx.globalAlpha=.8;
-    ctx.fillRect(W*.2-10, gy*.4-10, 20, 20); ctx.globalAlpha=1;
+  } else if (lv===1) {
+    // Sunrise on horizon
+    const sunG = ctx.createRadialGradient(W*.85,gy*.7,2,W*.85,gy*.7,80);
+    sunG.addColorStop(0,'rgba(255,180,50,0.5)'); sunG.addColorStop(1,'rgba(255,80,0,0)');
+    ctx.fillStyle=sunG; ctx.fillRect(W*.85-80,gy*.7-80,160,160);
+    ctx.fillStyle='#ffaa22'; ctx.globalAlpha=.6;
+    ctx.fillRect(W*.85-8, gy*.7-8, 16, 16); ctx.globalAlpha=1;
   }
 
-  // Buildings (parallax layer 1 at 0.25x, layer 2 at 0.5x)
-  for (let layer=0;layer<2;layer++) {
-    const parallax = layer===0 ? 0.25 : 0.5;
-    const alpha = layer===0 ? 0.55 : 0.85;
-    ctx.globalAlpha = alpha;
-    for (let i=0;i<10;i++) {
-      const seed = i*5023 + lv*1000 + layer*317;
-      const bw = 38 + seed%40, bh = 35 + seed%90;
-      const bx = ((i*115 - scrollX*parallax) % (W+120) + W+120) % (W+120) - 60;
-      const by = gy - bh;
-      ctx.fillStyle = layer===0 ? '#0a0a18' : '#0d0d22';
-      ctx.fillRect(Math.floor(bx), Math.floor(by), bw, bh);
-      // Windows
-      ctx.fillStyle = th.win;
-      const wc=Math.floor(bw/11), wr=Math.floor(bh/12);
-      for (let r=0;r<wr;r++) for (let c=0;c<wc;c++) {
-        if ((seed+r*7+c*3)%3!==0)
-          ctx.fillRect(Math.floor(bx+c*11+2), Math.floor(by+r*12+3), 7, 7);
+  // Parallax background: country = trees/fields, city = buildings
+  if (th.country) {
+    // Country: rolling hills, scattered trees
+    for (let layer=0;layer<2;layer++) {
+      const parallax = layer===0 ? 0.15 : 0.35;
+      const alpha = layer===0 ? 0.4 : 0.7;
+      ctx.globalAlpha = alpha;
+      for (let i=0;i<12;i++) {
+        const seed = i*3017 + lv*500 + layer*211;
+        const tx = ((i*100 - scrollX*parallax) % (W+140) + W+140) % (W+140) - 70;
+        const th2 = 18 + seed%30;
+        // Tree trunk
+        ctx.fillStyle = '#2a1a08';
+        ctx.fillRect(Math.floor(tx+6), gy-th2, 5, th2);
+        // Tree canopy
+        ctx.fillStyle = layer===0 ? '#0a2a08' : '#0d3310';
+        const cw = 16+seed%14;
+        ctx.fillRect(Math.floor(tx+8-cw/2), gy-th2-cw*.7, cw, Math.floor(cw*.7));
+        // Grass patches
+        if (i%3===0) {
+          ctx.fillStyle='#1a3a10';
+          ctx.fillRect(Math.floor(tx-8), gy-4, 30, 4);
+        }
       }
+      ctx.globalAlpha=1;
     }
-    ctx.globalAlpha=1;
+  } else {
+    // City: buildings
+    for (let layer=0;layer<2;layer++) {
+      const parallax = layer===0 ? 0.25 : 0.5;
+      const alpha = layer===0 ? 0.55 : 0.85;
+      ctx.globalAlpha = alpha;
+      for (let i=0;i<10;i++) {
+        const seed = i*5023 + lv*1000 + layer*317;
+        const bw = 38 + seed%40, bh = 35 + seed%90;
+        const bx = ((i*115 - scrollX*parallax) % (W+120) + W+120) % (W+120) - 60;
+        const by = gy - bh;
+        ctx.fillStyle = layer===0 ? '#0a0a18' : '#0d0d22';
+        ctx.fillRect(Math.floor(bx), Math.floor(by), bw, bh);
+        // Windows
+        ctx.fillStyle = th.win;
+        const wc=Math.floor(bw/11), wr=Math.floor(bh/12);
+        for (let r=0;r<wr;r++) for (let c=0;c<wc;c++) {
+          if ((seed+r*7+c*3)%3!==0)
+            ctx.fillRect(Math.floor(bx+c*11+2), Math.floor(by+r*12+3), 7, 7);
+        }
+      }
+      ctx.globalAlpha=1;
+    }
   }
 
   // Ground
@@ -505,27 +583,43 @@ function drawBG(lv) {
     ctx.fillRect(Math.floor(dx), gy+(H-gy)*.4, 32, 2);
   ctx.globalAlpha=1;
 
-  // Road markings (lv 0 and 2)
-  if (lv!==1) {
-    ctx.fillStyle='#ffff44'; ctx.globalAlpha=.12;
-    const rOff = scrollX % 90;
-    for (let dx=-rOff; dx<W; dx+=90)
-      ctx.fillRect(Math.floor(dx), gy+10, 50, 3);
+  // Road markings
+  ctx.fillStyle='#ffff44'; ctx.globalAlpha=.12;
+  const rOff = scrollX % 90;
+  for (let dx=-rOff; dx<W; dx+=90)
+    ctx.fillRect(Math.floor(dx), gy+10, 50, 3);
+  ctx.globalAlpha=1;
+
+  // Grass patches on country levels
+  if (th.country) {
+    ctx.fillStyle='#2a5a18'; ctx.globalAlpha=.3;
+    const grassOff = scrollX % 120;
+    for (let dx=-grassOff; dx<W; dx+=120)
+      ctx.fillRect(Math.floor(dx), gy+2, 40, 5);
     ctx.globalAlpha=1;
   }
 }
 
 // ── GOAL ───────────────────────────────────────
 function drawAndCheckGoal() {
-  if (distInLevel < LEVEL_LEN[level] - 500) return;
-  const progress = (distInLevel - (LEVEL_LEN[level]-500)) / 400;
+  const lvLen = LEVEL_LEN[Math.min(level, LEVEL_LEN.length-1)];
+  if (distInLevel < lvLen - 500) return;
+  const progress = (distInLevel - (lvLen-500)) / 400;
   const gx = Math.max(40, W - progress * (W - 160));
   const gy = GY();
 
   if (level === 0) {
-    // Office building
+    // Edge of town — road into city
+    ctx.fillStyle='#1a1a2a'; ctx.fillRect(gx, gy-60, 80, 60);
+    ctx.fillStyle='#ff8c00'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+    ctx.fillText('CITY LIMITS', gx+40, gy-45);
+    ctx.fillStyle='#ffcc00'; ctx.globalAlpha=.5+Math.sin(fc*.1)*.5;
+    ctx.fillRect(gx+30, gy-70, 20, 8);
+    ctx.globalAlpha=1;
+  } else if (level === 1) {
+    // Factory building — clock in
     ctx.fillStyle='#1a1a3a'; ctx.fillRect(gx, gy-130, 100, 130);
-    ctx.fillStyle='#39ff14'; ctx.globalAlpha=.9;
+    ctx.fillStyle='#ff8c00'; ctx.globalAlpha=.9;
     ctx.font='8px monospace'; ctx.textAlign='center';
     ctx.fillText('MUCKLO WORKS CO.', gx+50, gy-118);
     ctx.globalAlpha=1;
@@ -537,8 +631,11 @@ function drawAndCheckGoal() {
     // Door
     ctx.fillStyle='#885522'; ctx.fillRect(gx+36, gy-38, 28, 38);
     ctx.fillStyle='#aa6633'; ctx.fillRect(gx+38, gy-36, 12, 32); ctx.fillRect(gx+52, gy-36, 10, 32);
-  } else if (level === 1) {
-    // Exit sign
+    // Clock
+    ctx.fillStyle='#fff'; ctx.fillRect(gx+40, gy-140, 20, 20);
+    ctx.fillStyle='#333'; ctx.fillRect(gx+49, gy-138, 2, 8); ctx.fillRect(gx+49, gy-134, 6, 2);
+  } else if (level === 2) {
+    // Exit sign — leaving the city
     ctx.fillStyle='#005500'; ctx.fillRect(gx, gy-50, 70, 30);
     ctx.fillStyle='#00ff00'; ctx.font='bold 11px monospace'; ctx.textAlign='center';
     ctx.fillText('EXIT ▶', gx+35, gy-30);
@@ -546,8 +643,8 @@ function drawAndCheckGoal() {
     ctx.fillRect(gx+28, gy-80, 14, 26);
     ctx.globalAlpha=1;
   } else {
-    // The house — HOME!
-    drawHouseGoal(gx, gy-120);
+    // The trailer — HOME!
+    drawTrailerGoal(gx, gy-90);
   }
 
   // Check if player reaches it
@@ -561,36 +658,47 @@ function drawAndCheckGoal() {
   }
 }
 
-function drawHouseGoal(hx, hy) {
-  // Walls
-  ctx.fillStyle='#2a1a0a'; ctx.fillRect(hx, hy+36, 100, 84);
-  // Roof (stepped)
-  ctx.fillStyle='#553322';
-  for (let i=0;i<36;i++) ctx.fillRect(hx+i, hy+36-i, 100-i*2, 1);
+function drawTrailerGoal(hx, hy) {
+  // Trailer body
+  ctx.fillStyle='#3a3028'; ctx.fillRect(hx, hy+20, 110, 60);
+  ctx.fillStyle='#4a3a2a'; ctx.fillRect(hx+2, hy+22, 106, 56);
+  // Roof (flat with slight curve)
+  ctx.fillStyle='#555544'; ctx.fillRect(hx-2, hy+16, 114, 6);
+  // Stripe
+  ctx.fillStyle='#cc8844'; ctx.fillRect(hx, hy+40, 110, 4);
   // Door
-  ctx.fillStyle='#884422'; ctx.fillRect(hx+34, hy+78, 32, 42);
-  ctx.fillStyle='#cc7733'; ctx.fillRect(hx+36, hy+80, 13, 36); ctx.fillRect(hx+51, hy+80, 13, 36);
-  ctx.fillStyle='#ffaa44'; ctx.fillRect(hx+48, hy+96, 4, 4); // handle
+  ctx.fillStyle='#664422'; ctx.fillRect(hx+70, hy+38, 22, 42);
+  ctx.fillStyle='#885533'; ctx.fillRect(hx+72, hy+40, 8, 36); ctx.fillRect(hx+82, hy+40, 8, 36);
+  ctx.fillStyle='#ffaa44'; ctx.fillRect(hx+80, hy+56, 3, 3); // handle
+  // Steps
+  ctx.fillStyle='#444'; ctx.fillRect(hx+72, hy+80, 18, 4); ctx.fillRect(hx+74, hy+84, 14, 4);
   // Windows
   ctx.fillStyle='#ffcc88'; ctx.globalAlpha=.85+Math.sin(fc*.04)*.15;
-  ctx.fillRect(hx+8, hy+52, 22, 20); ctx.fillRect(hx+70, hy+52, 22, 20);
+  ctx.fillRect(hx+8, hy+28, 20, 16); ctx.fillRect(hx+34, hy+28, 20, 16);
   ctx.fillStyle='#ffeeaa'; ctx.globalAlpha=.4;
-  ctx.fillRect(hx+12, hy+55, 6, 8); ctx.fillRect(hx+74, hy+55, 6, 8);
+  ctx.fillRect(hx+12, hy+31, 6, 6); ctx.fillRect(hx+38, hy+31, 6, 6);
   ctx.globalAlpha=1;
+  // Wheels
+  ctx.fillStyle='#222'; ctx.fillRect(hx+10, hy+78, 14, 10); ctx.fillRect(hx+86, hy+78, 14, 10);
+  ctx.fillStyle='#555'; ctx.fillRect(hx+14, hy+80, 6, 6); ctx.fillRect(hx+90, hy+80, 6, 6);
   // Warm light glow
-  const lgl = ctx.createRadialGradient(hx+50, hy+98, 0, hx+50, hy+98, 60);
+  const lgl = ctx.createRadialGradient(hx+55, hy+60, 0, hx+55, hy+60, 50);
   lgl.addColorStop(0,'rgba(255,200,80,0.25)'); lgl.addColorStop(1,'rgba(255,200,80,0)');
-  ctx.fillStyle=lgl; ctx.fillRect(hx-10, hy+60, 120, 80);
-  // Sign
-  ctx.fillStyle='#00e5ff'; ctx.font='bold 10px monospace'; ctx.textAlign='center';
-  ctx.fillText('HOME', hx+50, hy+24);
-  // Wife waiting
-  drawWife(hx+8, hy+78);
+  ctx.fillStyle=lgl; ctx.fillRect(hx-10, hy+30, 130, 70);
+  // Mailbox
+  ctx.fillStyle='#666'; ctx.fillRect(hx-15, hy+55, 10, 30);
+  ctx.fillStyle='#888'; ctx.fillRect(hx-18, hy+52, 16, 8);
+  // Wife waiting at door
+  drawWife(hx+72, hy+52);
   // Wife waving
   if (fc%40<20) {
-    ctx.fillStyle='#ffcc99'; p(hx+8*PX+(-1)*PX, hy+78*PX+(5)*PX/PX, 1, 3, '#ffcc99');
+    ctx.fillStyle='#ffcc99';
+    ctx.fillRect(hx+72*1-PX, hy+52+5*PX/PX, PX, PX*3);
   }
 }
+
+// Keep old name as alias for ending scene
+function drawHouseGoal(hx, hy) { drawTrailerGoal(hx, hy); }
 
 // ── RENDER OBSTACLES ───────────────────────────
 function renderObs() {
@@ -599,12 +707,14 @@ function renderObs() {
     const sx = Math.floor(o.x - scrollX);
     if (sx > W+60 || sx+o.w < -40) continue;
     switch(o.type) {
-      case 'car':    drawCar(sx, o.y, o.w, o.h, o.col, o.col2); break;
-      case 'puddle': drawPuddle(sx, o.y, o.w, o.h, o.col); break;
-      case 'cone':   drawCone(sx, o.y, o.w, o.h); break;
-      case 'boss':   drawBoss(sx, o.y, o.w, o.h); break;
-      case 'paper':  drawPaper(sx, o.y, o.w, o.h); break;
-      case 'vending':drawVending(sx, o.y, o.w, o.h); break;
+      case 'car':     drawCar(sx, o.y, o.w, o.h, o.col, o.col2); break;
+      case 'puddle':  drawPuddle(sx, o.y, o.w, o.h, o.col); break;
+      case 'pothole': drawPothole(sx, o.y, o.w, o.h, o.col); break;
+      case 'cone':    drawCone(sx, o.y, o.w, o.h); break;
+      case 'hippie':  drawHippie(sx, o.y, o.w, o.h); break;
+      case 'paper':   drawPaper(sx, o.y, o.w, o.h); break;
+      case 'sign':    drawSign(sx, o.y, o.w, o.h); break;
+      case 'vending': drawVending(sx, o.y, o.w, o.h); break;
     }
   }
 }
@@ -624,10 +734,10 @@ function renderPicks() {
     switch(pk.tool) {
       case 'wrench': drawWrenchIcon(sx, by); break;
       case 'hammer': drawHammerIcon(sx, by); break;
-      case 'screwdriver': drawScrewdriverIcon(sx, by); break;
+      case 'thermos': drawThermosIcon(sx, by); break;
     }
     // Label
-    const lbls = { wrench:'SLOW', hammer:'SMASH', screwdriver:'DBLJ' };
+    const lbls = { wrench:'SLOW', hammer:'SMASH', thermos:'DBLJ' };
     ctx.fillStyle=pk.col; ctx.font='7px monospace'; ctx.textAlign='center';
     ctx.fillText(lbls[pk.tool], sx+pk.w/2, by-5);
   }
@@ -653,7 +763,8 @@ function updatePlay() {
   score += Math.round(dx * 0.8);
 
   // Spawn
-  if (distInLevel < LEVEL_LEN[level] - 200) {
+  const curLevelLen = LEVEL_LEN[Math.min(level, LEVEL_LEN.length-1)];
+  if (distInLevel < curLevelLen - 200) {
     if (distInLevel > nextObsAt) {
       const o = makeObs(level, scrollX + W + 60);
       if (o.extra) { obs.push(o.extra); delete o.extra; }
@@ -674,11 +785,11 @@ function updatePlay() {
   for (const o of obs) {
     if (o.hp<=0) continue;
     o.x += o.vx * slowFactor;
-    if (o.type==='paper') {
+    if (o.type==='paper' || o.type==='sign') {
       o.phase += 0.055;
       o.y = (o.y + Math.sin(o.phase)*2.2);
     }
-    if (o.type==='boss') {
+    if (o.type==='hippie') {
       o.bobT += 0.06;
       o.y = o.origY + Math.sin(o.bobT)*8;
     }
@@ -740,7 +851,7 @@ function updatePlay() {
       pk.done=true; score+=100; sfxCollect();
       burst(px2+pk.w/2, pk.y+pk.h/2, pk.col, 12);
       pl.tool=pk.tool; pl.toolTimer=360;
-      if (pk.tool==='screwdriver') pl.maxJumps=2;
+      if (pk.tool==='thermos') pl.maxJumps=2;
       updateToolHUD();
     }
   }
@@ -761,7 +872,7 @@ function updateHUD() {
 function updateToolHUD() {
   const el = document.getElementById('tool-hud');
   if (!pl.tool) { el.textContent=''; return; }
-  const n = { wrench:'SLOW-MO', hammer:'SMASH!', screwdriver:'DBL JUMP' };
+  const n = { wrench:'SLOW-MO', hammer:'SMASH!', thermos:'CAFFEINE!' };
   const pct = Math.ceil(pl.toolTimer/360*100);
   el.textContent = n[pl.tool]+'\n['+pct+'%]';
 }
@@ -789,7 +900,9 @@ function drawTitle() {
 
   // Tagline
   ctx.fillStyle='#00e5ff'; ctx.font=`${Math.floor(Math.min(W*.024,14))}px monospace`; ctx.textAlign='center';
-  ctx.fillText('AN 8-BIT PLATFORMER ADVENTURE', W/2, H*.46);
+  ctx.fillText('A WORKING MAN\'S SIDE-SCROLLER', W/2, H*.43);
+  ctx.fillStyle='#aaa'; ctx.font=`${Math.floor(Math.min(W*.018,11))}px monospace`;
+  ctx.fillText('Trailer. Wife. Baby. Factory. Repeat.', W/2, H*.48);
 
   // Character walk animation on title
   const wx = W/2 - CW/2 + Math.sin(titleT*.03)*20;
@@ -806,7 +919,7 @@ function drawTitle() {
   // Controls
   ctx.fillStyle='#fff'; ctx.globalAlpha=.45;
   ctx.font=`${Math.floor(Math.min(W*.018,11))}px monospace`; ctx.textAlign='center';
-  ctx.fillText('JUMP: SPACE / TAP BUTTON  •  COLLECT TOOLS FOR POWERS', W/2, H*.91);
+  ctx.fillText('JUMP: SPACE / TAP  •  GRAB WRENCHES, HAMMERS & THERMOSES', W/2, H*.91);
   ctx.globalAlpha=1;
 }
 
@@ -825,8 +938,8 @@ function drawTransition() {
   ctx.fillText('LEVEL CLEAR!', W/2, H*.38);
   ctx.shadowBlur=0;
 
-  const msgs = ["TIME TO CLOCK IN!", "QUITTING TIME!", ""];
-  if (level < 2) {
+  const msgs = ["INTO THE CITY...", "TIME TO CLOCK IN!", "SHIFT'S OVER. HEAD HOME.", ""];
+  if (level < 3) {
     ctx.fillStyle='#ffcc00'; ctx.font=`${Math.floor(Math.min(W*.04,22))}px monospace`;
     ctx.fillText(msgs[level], W/2, H*.52);
   }
@@ -855,7 +968,7 @@ function drawDead() {
   ctx.shadowBlur=0;
 
   ctx.fillStyle='#fff'; ctx.font=`${Math.floor(Math.min(W*.028,16))}px monospace`;
-  ctx.fillText("Mucklo boy didn't make it today...", W/2, H*.52);
+  ctx.fillText("Those hippies got the best of him...", W/2, H*.52);
   ctx.fillText('SCORE: '+score, W/2, H*.61);
 
   if (deathT>80 && Math.floor(deathT/28)%2===0) {
@@ -901,9 +1014,9 @@ function drawEnding() {
   ctx.fillStyle='#101520'; ctx.fillRect(0, gy, W, H-gy);
   ctx.fillStyle='#00e5ff'; ctx.fillRect(0, gy, W, 3);
 
-  // House (centered-right)
-  const hx = W*.48, hy = gy-120;
-  drawHouseGoal(hx, hy);
+  // Trailer (centered-right)
+  const hx = W*.48, hy = gy-90;
+  drawTrailerGoal(hx, hy);
 
   // Mucklo walking toward house
   const walkProgress = Math.min(1, (endT-50)/200);
@@ -923,7 +1036,7 @@ function drawEnding() {
     ctx.globalAlpha = Math.min(1, arrT*3);
     ctx.fillStyle='#fff'; ctx.fillRect(hx-5, hy+40, 90, 22);
     ctx.fillStyle='#ff3cac'; ctx.font='8px monospace'; ctx.textAlign='left';
-    ctx.fillText("YOU MADE IT! ♥", hx-1, hy+55);
+    ctx.fillText("WELCOME HOME! ♥", hx-1, hy+55);
     ctx.globalAlpha=1;
   }
 
@@ -946,11 +1059,12 @@ function drawEnding() {
       ctx.shadowBlur=0;
 
       ctx.fillStyle='#ffcc00'; ctx.font=`${Math.floor(Math.min(W*.04,22))}px monospace`;
-      ctx.fillText('Mucklo boy made it home.', W/2, H*.36);
+      ctx.fillText('Mucklo made it home.', W/2, H*.36);
 
       ctx.fillStyle='#fff'; ctx.font=`${Math.floor(Math.min(W*.03,16))}px monospace`;
-      ctx.fillText('His wife was waiting at the door.', W/2, H*.46);
-      ctx.fillText('The toolbox never let him down.', W/2, H*.54);
+      ctx.fillText('His wife was waiting at the trailer door.', W/2, H*.44);
+      ctx.fillText('The baby finally stopped crying.', W/2, H*.50);
+      ctx.fillText('The toolbox never let him down.', W/2, H*.56);
 
       ctx.fillStyle='#39ff14'; ctx.shadowColor='#39ff14'; ctx.shadowBlur=12;
       ctx.font=`${Math.floor(Math.min(W*.038,20))}px monospace`;
@@ -973,6 +1087,207 @@ function drawEnding() {
   }
 }
 
+// ── BIKE CRASH INTRO ──────────────────────────
+function drawBike(bx, by, angle) {
+  ctx.save();
+  ctx.translate(bx, by);
+  if (angle) ctx.rotate(angle);
+  // Wheels
+  ctx.fillStyle='#444'; ctx.fillRect(-12, 4, 10, 10); ctx.fillRect(12, 4, 10, 10);
+  ctx.fillStyle='#666'; ctx.fillRect(-10, 6, 6, 6); ctx.fillRect(14, 6, 6, 6);
+  // Frame
+  ctx.fillStyle='#888'; ctx.fillRect(-4, -2, 18, 3);
+  ctx.fillRect(-2, -8, 3, 10); ctx.fillRect(12, -6, 3, 8);
+  // Handlebars
+  ctx.fillStyle='#aaa'; ctx.fillRect(10, -10, 8, 3);
+  // Seat
+  ctx.fillStyle='#553'; ctx.fillRect(-4, -10, 8, 3);
+  ctx.restore();
+}
+
+function drawCrashIntro() {
+  crashT++;
+  const gy = GY();
+
+  // Draw country background
+  drawBG(0);
+
+  if (crashT < 60) {
+    // Phase 1: Mucklo riding bike, hits pothole
+    const bikeX = W * 0.3 + crashT * 1.5;
+    const bikeY = gy - 20;
+    drawBike(bikeX, bikeY, 0);
+    drawMucklo(bikeX - 8, bikeY - CH - 6, Math.floor(crashT/6)%3);
+
+    // Pothole ahead
+    ctx.fillStyle='#332211';
+    ctx.fillRect(W*0.6, gy-5, 40, 8);
+    ctx.fillStyle='#111'; ctx.globalAlpha=0.6;
+    ctx.fillRect(W*0.6+5, gy-3, 30, 4);
+    ctx.globalAlpha=1;
+
+    // Text
+    ctx.fillStyle='#ffcc00'; ctx.font=`bold ${Math.floor(Math.min(W*.04,20))}px monospace`; ctx.textAlign='center';
+    ctx.fillText('BEFORE DAWN...', W/2, H*0.15);
+    ctx.fillStyle='#fff'; ctx.font=`${Math.floor(Math.min(W*.025,13))}px monospace`;
+    ctx.fillText('Mucklo rides to work in the dark.', W/2, H*0.22);
+  } else if (crashT < 120) {
+    // Phase 2: CRASH! Mucklo flies off bike
+    const crashProgress = (crashT - 60) / 60;
+    const bikeX = W * 0.6;
+    const bikeAngle = crashProgress * 1.2;
+    drawBike(bikeX, gy - 15, bikeAngle);
+
+    // Mucklo flying through air
+    const flyX = bikeX - 20 + crashProgress * 60;
+    const flyY = gy - CH - 10 - Math.sin(crashProgress * Math.PI) * 120;
+    drawMucklo(flyX, flyY, 4);
+
+    // Impact stars
+    if (crashT === 61) burst(bikeX, gy - 10, '#ffcc00', 20);
+    renderParts();
+    for (const pt of parts) { pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=.18; pt.life-=.028; }
+    parts = parts.filter(pt=>pt.life>0);
+
+    // CRASH text
+    const flashAlpha = 0.6 + Math.sin(crashT*0.3)*0.4;
+    ctx.fillStyle='#ff3cac'; ctx.globalAlpha=flashAlpha;
+    ctx.shadowColor='#ff3cac'; ctx.shadowBlur=20;
+    ctx.font=`bold ${Math.floor(Math.min(W*.12,64))}px monospace`; ctx.textAlign='center';
+    ctx.fillText('CRASH!', W/2, H*0.3);
+    ctx.shadowBlur=0; ctx.globalAlpha=1;
+  } else {
+    // Phase 3: Landing — tap to land in grass
+    const landT = crashT - 120;
+    const muckloY = Math.min(gy - CH, gy - CH - 80 + landT * 3);
+
+    // Grass patches highlighted
+    const grassPulse = 0.4 + Math.sin(crashT*0.15)*0.3;
+    ctx.fillStyle='#44cc22'; ctx.globalAlpha=grassPulse;
+    ctx.fillRect(W*0.35, gy-6, 50, 8);
+    ctx.fillRect(W*0.55, gy-6, 45, 8);
+    ctx.globalAlpha=1;
+
+    if (!crashLanded) {
+      drawMucklo(W*0.45, muckloY, 3);
+
+      // Prompt to tap
+      if (Math.floor(crashT/18)%2===0) {
+        ctx.fillStyle='#39ff14'; ctx.shadowColor='#39ff14'; ctx.shadowBlur=12;
+        ctx.font=`bold ${Math.floor(Math.min(W*.035,18))}px monospace`; ctx.textAlign='center';
+        ctx.fillText('TAP NOW TO LAND IN GRASS!', W/2, H*0.2);
+        ctx.shadowBlur=0;
+      }
+      ctx.fillStyle='#aaa'; ctx.font=`${Math.floor(Math.min(W*.02,11))}px monospace`; ctx.textAlign='center';
+      ctx.fillText('+1 LIFE IF YOU LAND IN THE GRASS', W/2, H*0.26);
+
+      // Auto-land after a while
+      if (landT > 100) {
+        crashLanded = true;
+        crashGrassBonus = false;
+      }
+    } else {
+      // Landed
+      drawMucklo(W*0.45, gy-CH, 1);
+
+      if (crashGrassBonus) {
+        ctx.fillStyle='#39ff14'; ctx.shadowColor='#39ff14'; ctx.shadowBlur=15;
+        ctx.font=`bold ${Math.floor(Math.min(W*.05,26))}px monospace`; ctx.textAlign='center';
+        ctx.fillText('GRASS LANDING! +1 LIFE!', W/2, H*0.2);
+        ctx.shadowBlur=0;
+        // Green sparkles
+        if (landT%4===0) burst(W*0.45+CW/2, gy-5, '#44cc22', 3);
+      } else {
+        ctx.fillStyle='#ffcc00'; ctx.font=`bold ${Math.floor(Math.min(W*.04,20))}px monospace`; ctx.textAlign='center';
+        ctx.fillText('OUCH! HARD LANDING...', W/2, H*0.2);
+      }
+
+      renderParts();
+      for (const pt of parts) { pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=.18; pt.life-=.028; }
+      parts = parts.filter(pt=>pt.life>0);
+
+      if (landT > 60) {
+        // Transition to gameplay
+        state = ST.PLAY;
+        crashIntro = false;
+        parts = [];
+      }
+    }
+  }
+}
+
+// ── GAME OVER SCENE (wife leaves) ─────────────
+function drawGameOverScene() {
+  const gy = GY();
+
+  // Dark scene
+  ctx.fillStyle='#050510'; ctx.fillRect(0,0,W,H);
+
+  // Ground
+  ctx.fillStyle='#101510'; ctx.fillRect(0,gy,W,H-gy);
+  ctx.fillStyle='#333'; ctx.fillRect(0,gy,W,2);
+
+  // The trailer in background
+  const tx = W*0.6;
+  ctx.fillStyle='#2a2018'; ctx.fillRect(tx, gy-60, 90, 60);
+  ctx.fillStyle='#444'; ctx.fillRect(tx-2, gy-64, 94, 5);
+  ctx.fillStyle='#cc8844'; ctx.fillRect(tx, gy-42, 90, 3);
+  // Dark windows (lights off)
+  ctx.fillStyle='#111'; ctx.fillRect(tx+8, gy-52, 16, 12); ctx.fillRect(tx+30, gy-52, 16, 12);
+  // Open door
+  ctx.fillStyle='#221100'; ctx.fillRect(tx+60, gy-48, 20, 48);
+
+  const gameOverT = fc; // use global frame counter for animation
+
+  // Wife walking away with suitcase toward car
+  const wifeProgress = Math.min(1, (gameOverT % 400) / 200);
+  const wifeX = tx + 40 - wifeProgress * (tx - 40);
+  drawWife(wifeX, gy - 34);
+
+  // Suitcase
+  ctx.fillStyle='#885544'; ctx.fillRect(wifeX + 22, gy-22, 12, 14);
+  ctx.fillStyle='#664433'; ctx.fillRect(wifeX + 24, gy-24, 8, 3);
+
+  // Baby (small bundle)
+  ctx.fillStyle='#ffddcc'; ctx.fillRect(wifeX - 6, gy-30, 6, 6);
+  ctx.fillStyle='#aaddee'; ctx.fillRect(wifeX - 7, gy-28, 8, 5);
+
+  // Stranger's car waiting on the left
+  drawCar(30, gy-32, 56, 30, '#556677', '#445566');
+  // Headlights on
+  ctx.fillStyle='#ffee88'; ctx.globalAlpha=0.6+Math.sin(gameOverT*.1)*.3;
+  ctx.fillRect(88, gy-22, 8, 6);
+  ctx.globalAlpha=1;
+
+  // Mucklo standing at trailer door, sad
+  if (wifeProgress > 0.3) {
+    const mSadX = tx + 55;
+    drawMucklo(mSadX, gy-CH, 4);
+    // Tear
+    ctx.fillStyle='#4488ff';
+    ctx.fillRect(mSadX + 5*PX, gy-CH + 6*PX + Math.floor(Math.sin(gameOverT*.1)*2), PX, PX*2);
+  }
+
+  // Text
+  ctx.fillStyle='#ff3cac'; ctx.shadowColor='#ff3cac'; ctx.shadowBlur=18;
+  ctx.font=`bold ${Math.floor(Math.min(W*.09,48))}px monospace`; ctx.textAlign='center';
+  ctx.fillText('GAME OVER', W/2, H*.18);
+  ctx.shadowBlur=0;
+
+  ctx.fillStyle='#fff'; ctx.font=`${Math.floor(Math.min(W*.025,14))}px monospace`;
+  ctx.fillText("Mucklo didn't make it home.", W/2, H*.28);
+  ctx.fillText("She packed her bags...", W/2, H*.33);
+  ctx.fillText("...took the baby and left.", W/2, H*.38);
+
+  ctx.fillStyle='#aaa'; ctx.font=`${Math.floor(Math.min(W*.022,12))}px monospace`;
+  ctx.fillText('SCORE: '+score, W/2, H*.46);
+
+  if (Math.floor(gameOverT/28)%2===0) {
+    ctx.fillStyle='#ffcc00'; ctx.font=`${Math.floor(Math.min(W*.032,18))}px monospace`;
+    ctx.fillText('TAP / SPACE TO TRY AGAIN', W/2, H*.92);
+  }
+}
+
 // ── WRENCH SLOW-MO OVERLAY ─────────────────────
 function drawSlowOverlay() {
   if (pl.tool !== 'wrench') return;
@@ -991,6 +1306,10 @@ function loop() {
   switch(state) {
     case ST.TITLE:
       drawTitle();
+      break;
+
+    case ST.CRASH:
+      drawCrashIntro();
       break;
 
     case ST.PLAY:
@@ -1018,17 +1337,7 @@ function loop() {
       break;
 
     case ST.GAMEOVER:
-      ctx.fillStyle='#050507'; ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#ff3cac'; ctx.shadowColor='#ff3cac'; ctx.shadowBlur=18;
-      ctx.font=`bold ${Math.floor(Math.min(W*.1,56))}px monospace`; ctx.textAlign='center';
-      ctx.fillText('GAME OVER', W/2, H*.4);
-      ctx.shadowBlur=0;
-      ctx.fillStyle='#fff'; ctx.font=`${Math.floor(Math.min(W*.028,16))}px monospace`;
-      ctx.fillText('SCORE: '+score, W/2, H*.55);
-      if (Math.floor(fc/28)%2===0) {
-        ctx.fillStyle='#ffcc00'; ctx.font=`${Math.floor(Math.min(W*.032,18))}px monospace`;
-        ctx.fillText('TAP / SPACE TO PLAY AGAIN', W/2, H*.72);
-      }
+      drawGameOverScene();
       break;
 
     case ST.ENDING:
@@ -1056,9 +1365,22 @@ function action() {
       state=ST.PLAY; initGame(); break;
     case ST.PLAY:
       jump(); break;
+    case ST.CRASH:
+      if (crashT > 30) {
+        // Tap during crash to land in grass for bonus
+        if (!crashLanded) {
+          crashLanded = true;
+          crashGrassBonus = true;
+          lives = Math.min(lives + 1, 5);
+          sfxCollect();
+          burst(pl.x+CW/2, GY()-CH/2, '#44cc22', 15);
+          updateHUD();
+        }
+      }
+      break;
     case ST.TRANSITION:
       if (transT < 70) return;
-      if (level < 2) {
+      if (level < 3) {
         initLevel(level+1); state=ST.PLAY;
       } else {
         state=ST.ENDING; endT=0; endPhase=0;
