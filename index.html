@@ -643,8 +643,8 @@ function drawAndCheckGoal() {
     ctx.fillRect(gx+28, gy-80, 14, 26);
     ctx.globalAlpha=1;
   } else {
-    // The trailer — HOME!
-    drawTrailerGoal(gx, gy-90);
+    // Home goal
+    drawHomeGoal(gx, gy-90);
   }
 
   // Check if player reaches it
@@ -658,47 +658,47 @@ function drawAndCheckGoal() {
   }
 }
 
-function drawTrailerGoal(hx, hy) {
-  // Trailer body
-  ctx.fillStyle='#3a3028'; ctx.fillRect(hx, hy+20, 110, 60);
-  ctx.fillStyle='#4a3a2a'; ctx.fillRect(hx+2, hy+22, 106, 56);
-  // Roof (flat with slight curve)
-  ctx.fillStyle='#555544'; ctx.fillRect(hx-2, hy+16, 114, 6);
-  // Stripe
-  ctx.fillStyle='#cc8844'; ctx.fillRect(hx, hy+40, 110, 4);
+function drawHomeGoal(hx, hy) {
+  // House body
+  ctx.fillStyle='#3a3028'; ctx.fillRect(hx+8, hy+26, 94, 54);
+  ctx.fillStyle='#4a3a2a'; ctx.fillRect(hx+10, hy+28, 90, 50);
+  // Roof
+  ctx.fillStyle='#555544';
+  ctx.beginPath();
+  ctx.moveTo(hx, hy+30);
+  ctx.lineTo(hx+55, hy);
+  ctx.lineTo(hx+110, hy+30);
+  ctx.closePath();
+  ctx.fill();
+  // Chimney
+  ctx.fillStyle='#6a4b32'; ctx.fillRect(hx+72, hy+8, 10, 20);
   // Door
-  ctx.fillStyle='#664422'; ctx.fillRect(hx+70, hy+38, 22, 42);
-  ctx.fillStyle='#885533'; ctx.fillRect(hx+72, hy+40, 8, 36); ctx.fillRect(hx+82, hy+40, 8, 36);
-  ctx.fillStyle='#ffaa44'; ctx.fillRect(hx+80, hy+56, 3, 3); // handle
+  ctx.fillStyle='#664422'; ctx.fillRect(hx+68, hy+42, 18, 38);
+  ctx.fillStyle='#885533'; ctx.fillRect(hx+70, hy+44, 6, 32); ctx.fillRect(hx+78, hy+44, 6, 32);
+  ctx.fillStyle='#ffaa44'; ctx.fillRect(hx+81, hy+59, 2, 2);
   // Steps
-  ctx.fillStyle='#444'; ctx.fillRect(hx+72, hy+80, 18, 4); ctx.fillRect(hx+74, hy+84, 14, 4);
+  ctx.fillStyle='#444'; ctx.fillRect(hx+66, hy+80, 22, 4); ctx.fillRect(hx+68, hy+84, 18, 4);
   // Windows
   ctx.fillStyle='#ffcc88'; ctx.globalAlpha=.85+Math.sin(fc*.04)*.15;
-  ctx.fillRect(hx+8, hy+28, 20, 16); ctx.fillRect(hx+34, hy+28, 20, 16);
+  ctx.fillRect(hx+18, hy+38, 18, 14); ctx.fillRect(hx+42, hy+38, 18, 14);
   ctx.fillStyle='#ffeeaa'; ctx.globalAlpha=.4;
-  ctx.fillRect(hx+12, hy+31, 6, 6); ctx.fillRect(hx+38, hy+31, 6, 6);
+  ctx.fillRect(hx+21, hy+41, 5, 5); ctx.fillRect(hx+45, hy+41, 5, 5);
   ctx.globalAlpha=1;
-  // Wheels
-  ctx.fillStyle='#222'; ctx.fillRect(hx+10, hy+78, 14, 10); ctx.fillRect(hx+86, hy+78, 14, 10);
-  ctx.fillStyle='#555'; ctx.fillRect(hx+14, hy+80, 6, 6); ctx.fillRect(hx+90, hy+80, 6, 6);
   // Warm light glow
-  const lgl = ctx.createRadialGradient(hx+55, hy+60, 0, hx+55, hy+60, 50);
+  const lgl = ctx.createRadialGradient(hx+55, hy+58, 0, hx+55, hy+58, 52);
   lgl.addColorStop(0,'rgba(255,200,80,0.25)'); lgl.addColorStop(1,'rgba(255,200,80,0)');
-  ctx.fillStyle=lgl; ctx.fillRect(hx-10, hy+30, 130, 70);
+  ctx.fillStyle=lgl; ctx.fillRect(hx-8, hy+24, 126, 72);
   // Mailbox
   ctx.fillStyle='#666'; ctx.fillRect(hx-15, hy+55, 10, 30);
   ctx.fillStyle='#888'; ctx.fillRect(hx-18, hy+52, 16, 8);
   // Wife waiting at door
-  drawWife(hx+72, hy+52);
+  drawWife(hx+68, hy+52);
   // Wife waving
   if (fc%40<20) {
     ctx.fillStyle='#ffcc99';
-    ctx.fillRect(hx+72*1-PX, hy+52+5*PX/PX, PX, PX*3);
+    ctx.fillRect(hx+68-PX, hy+57, PX, PX*3);
   }
 }
-
-// Keep old name as alias for ending scene
-function drawHouseGoal(hx, hy) { drawTrailerGoal(hx, hy); }
 
 // ── RENDER OBSTACLES ───────────────────────────
 function renderObs() {
@@ -901,8 +901,6 @@ function drawTitle() {
   // Tagline
   ctx.fillStyle='#00e5ff'; ctx.font=`${Math.floor(Math.min(W*.024,14))}px monospace`; ctx.textAlign='center';
   ctx.fillText('A WORKING MAN\'S SIDE-SCROLLER', W/2, H*.43);
-  ctx.fillStyle='#aaa'; ctx.font=`${Math.floor(Math.min(W*.018,11))}px monospace`;
-  ctx.fillText('Trailer. Wife. Baby. Factory. Repeat.', W/2, H*.48);
 
   // Character walk animation on title
   const wx = W/2 - CW/2 + Math.sin(titleT*.03)*20;
@@ -1014,9 +1012,9 @@ function drawEnding() {
   ctx.fillStyle='#101520'; ctx.fillRect(0, gy, W, H-gy);
   ctx.fillStyle='#00e5ff'; ctx.fillRect(0, gy, W, 3);
 
-  // Trailer (centered-right)
+  // Home (centered-right)
   const hx = W*.48, hy = gy-90;
-  drawTrailerGoal(hx, hy);
+  drawHomeGoal(hx, hy);
 
   // Mucklo walking toward house
   const walkProgress = Math.min(1, (endT-50)/200);
@@ -1062,7 +1060,7 @@ function drawEnding() {
       ctx.fillText('Mucklo made it home.', W/2, H*.36);
 
       ctx.fillStyle='#fff'; ctx.font=`${Math.floor(Math.min(W*.03,16))}px monospace`;
-      ctx.fillText('His wife was waiting at the trailer door.', W/2, H*.44);
+      ctx.fillText('His wife was waiting at the front door.', W/2, H*.44);
       ctx.fillText('The baby finally stopped crying.', W/2, H*.50);
       ctx.fillText('The toolbox never let him down.', W/2, H*.56);
 
@@ -1227,15 +1225,20 @@ function drawGameOverScene() {
   ctx.fillStyle='#101510'; ctx.fillRect(0,gy,W,H-gy);
   ctx.fillStyle='#333'; ctx.fillRect(0,gy,W,2);
 
-  // The trailer in background
+  // Dark house in background
   const tx = W*0.6;
-  ctx.fillStyle='#2a2018'; ctx.fillRect(tx, gy-60, 90, 60);
-  ctx.fillStyle='#444'; ctx.fillRect(tx-2, gy-64, 94, 5);
-  ctx.fillStyle='#cc8844'; ctx.fillRect(tx, gy-42, 90, 3);
+  ctx.fillStyle='#2a2018'; ctx.fillRect(tx+6, gy-56, 78, 56);
+  ctx.fillStyle='#444';
+  ctx.beginPath();
+  ctx.moveTo(tx, gy-56);
+  ctx.lineTo(tx+45, gy-88);
+  ctx.lineTo(tx+90, gy-56);
+  ctx.closePath();
+  ctx.fill();
   // Dark windows (lights off)
-  ctx.fillStyle='#111'; ctx.fillRect(tx+8, gy-52, 16, 12); ctx.fillRect(tx+30, gy-52, 16, 12);
+  ctx.fillStyle='#111'; ctx.fillRect(tx+14, gy-46, 14, 12); ctx.fillRect(tx+34, gy-46, 14, 12);
   // Open door
-  ctx.fillStyle='#221100'; ctx.fillRect(tx+60, gy-48, 20, 48);
+  ctx.fillStyle='#221100'; ctx.fillRect(tx+58, gy-40, 18, 40);
 
   const gameOverT = fc; // use global frame counter for animation
 
@@ -1259,7 +1262,7 @@ function drawGameOverScene() {
   ctx.fillRect(88, gy-22, 8, 6);
   ctx.globalAlpha=1;
 
-  // Mucklo standing at trailer door, sad
+  // Mucklo standing at the front door, sad
   if (wifeProgress > 0.3) {
     const mSadX = tx + 55;
     drawMucklo(mSadX, gy-CH, 4);
